@@ -16,3 +16,6 @@ reponse = r.json()
 print("Nombre de stations : ", reponse["count"])
 print("Nombre d'éléments dans data : ", len(reponse["data"]))
 print(reponse["data"][0])
+
+with open("data/brut/stations_78.json" , "w", encoding="utf-8") as f:
+    json.dump(reponse, f, ensure_ascii=False, indent=2)
