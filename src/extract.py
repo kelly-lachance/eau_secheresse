@@ -50,12 +50,3 @@ for departement in DEPARTEMENTS_IDF :
     with open(mon_fichier, "w", encoding="utf-8") as f:
         json.dump(donnees, f, ensure_ascii=False, indent=2)
 
-URL_CHRONIQUE = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques"
-STATIONS_SUIVIES = ["01825X0091/P1"]
-
-for code_bss in STATIONS_SUIVIES : 
-    parametres_chroniques = {"code_bss" : code_bss, "size" : 5000}
-    donnees_chroniques = parcourir_les_pages(URL_CHRONIQUE,parametres_chroniques)
-    mon_fichier_chronique = f"data/brut/chroniques_{code_bss.replace("/" , "_")}.json"
-    with open(mon_fichier_chronique, "w", encoding="utf-8") as f:
-        json.dump(donnees_chroniques, f, ensure_ascii=False, indent=2)
