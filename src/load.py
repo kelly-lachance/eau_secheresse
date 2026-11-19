@@ -1,7 +1,7 @@
 
 import json
 import sqlite3
-DEPARTEMENTS_IDF = ["78"]
+DEPARTEMENTS_IDF = ["75", "77", "78", "91", "92", "93", "94", "95"]
 
 conn = sqlite3.connect("data/eau_secheresse.db")
 
@@ -34,4 +34,25 @@ for departement in DEPARTEMENTS_IDF :
     cur.executemany("""INSERT OR REPLACE INTO raw_stations (code_bss,date_debut_mesure,date_fin_mesure,code_commune_insee,nom_commune,x,y,altitude_station,nb_mesures_piezo,code_departement,nom_departement,profondeur_investigation) 
     VALUES(:code_bss,:date_debut_mesure, :date_fin_mesure, :code_commune_insee, :nom_commune, :x, :y, :altitude_station, :nb_mesures_piezo, :code_departement, :nom_departement, :profondeur_investigation)""", stations)
     conn.commit()
-conn.close()   
+cur.execute("SELECT COUNT(*) FROM raw_stations")
+compteur = cur.fetchone()
+print(f"Station chargées : {compteur[0]}")
+
+cur.execute("""SELECT COUNT(*) FROM raw_stations
+WHERE date_debut_mesure <= '2016-01-01'
+  AND date_fin_mesure  >= '2026-01-01'
+  AND nb_mesures_piezo >= 3300""")
+nombre_stations = cur.fetchone()
+print(f"Stations utiles : {nombre_stations[0]}")
+
+cur.execute("""SELECT code_departement, COUNT(code_bss) FROM raw_stations 
+WHERE date_debut_mesure <= '2016-01-01'
+  AND date_fin_mesure  >= '2026-01-01'
+  AND nb_mesures_piezo >= 3300
+  GROUP BY code_departement""")
+lien_dept_stations = cur.fetchall()
+for departement, nb_stations in lien_dept_stations : 
+    print(f"{departement} : {nb_stations} station(s) utile(s)")
+
+conn.close()
+
