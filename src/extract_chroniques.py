@@ -21,6 +21,28 @@ print(len(STATIONS_SUIVIES))
 
 conn.close()
 
+def appeler_api(url, parametres) : 
+    for tentative in range(3) : 
+        try : 
+            r = requests.get(url, headers=ENTETES, timeout=60, params=parametres)
+            r.raise_for_status()  
+            return r
+        except requests.exceptions.Timeout : 
+            print(f"Tentative {tentative +1} échouée. Attendre 15s avant nouvelle tentative")
+            time.sleep(15)
+        except requests.exceptions.HTTPError as e :
+            if e.response.status_code >= 500 : 
+                print(f"le serveur a répondu par une erreur : {e}. Tentative {tentative +1} échouée. Attendre 15s avant nouvelle tentative")
+                time.sleep(15)
+            else : 
+                print(f"le serveur a répondu par une erreur 4xx. Inutile de ressayer, il faut corriger")
+                raise
+        except requests.exceptions.RequestException as e :
+            print(f"Problème réseau : {e}. Tentative {tentative +1} échouée. Attendre 15s avant nouvelle tentative")
+            time.sleep(15)
+    raise RuntimeError(f"Nombre de tentative réalisée : {tentative +1}. Recommencer demain")
+
+
 
 def parcourir_les_pages(url, parametres) : 
     page = 0
@@ -28,8 +50,7 @@ def parcourir_les_pages(url, parametres) :
     donnees =[] #accumule les donnees de toutes les pages
     while page < page_max and url is not None :
         try :  
-            r = requests.get(url, headers=ENTETES, timeout=60, params=parametres)
-            r.raise_for_status() 
+            r = appeler_api(url, parametres) 
             reponse = r.json()
 
             donnees.extend(reponse["data"])
@@ -37,15 +58,6 @@ def parcourir_les_pages(url, parametres) :
             parametres = None
             page += 1
             print(f"Nombre de page : {page}")
-        except requests.exceptions.Timeout : 
-            print("C'est trop lent, on s'arrête là")
-            raise
-        except requests.exceptions.HTTPError as e :
-            print(f"le serveur a répondu par une erreur : {e}")
-            raise
-        except requests.exceptions.RequestException as e :
-            print(f"Problème réseau : {e}")
-            raise
         finally : 
             time.sleep(1)
 
