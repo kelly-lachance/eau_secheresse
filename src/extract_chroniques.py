@@ -77,14 +77,22 @@ def parcourir_les_pages(url, parametres) :
         raise ValueError(f"Chargement des données NOK, Nombre d'éléments reçues : {len(donnees)} sur un total de {reponse['count']}")
 
 nb_fichier_chronique = 0
+compteur_mesure_recu = 0
 for code_bss in STATIONS_SUIVIES : 
     mon_fichier_chronique = f"data/brut/chroniques_{code_bss.replace("/" , "_")}_{date.today()}.json"
     parametres_chroniques = {"code_bss" : code_bss, "size" : 1000, "date_debut_mesure" : date_chroniques[code_bss]} 
     donnees_chroniques = parcourir_les_pages(URL_CHRONIQUE,parametres_chroniques)
+    compteur_mesure_recu += len(donnees_chroniques)
     with open(mon_fichier_chronique, "w", encoding="utf-8") as f:
         json.dump(donnees_chroniques, f, ensure_ascii=False, indent=2)
         nb_fichier_chronique += 1
-if nb_fichier_chronique == len(STATIONS_SUIVIES) : 
+if nb_fichier_chronique == len(STATIONS_SUIVIES): 
     print(f"Le chargement est complet, vous avez chargé {nb_fichier_chronique}  / {len(STATIONS_SUIVIES)} fichiers")
 else : 
     raise ValueError(f"Le chargement est incomplet, vous avez chargé {nb_fichier_chronique} / {len(STATIONS_SUIVIES)} fichiers")
+
+if compteur_mesure_recu != 0 : 
+    print(f"Total de nouvelles données ajoutées : {compteur_mesure_recu}")
+else : 
+    raise ValueError(f"Problème lors du chargement des données, le compteur des chroniques est à 0 pour toutes les stations")
+
