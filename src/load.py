@@ -1,6 +1,9 @@
 
 import json
 import sqlite3
+from datetime import date
+import os
+
 DEPARTEMENTS_IDF = ["75", "77", "78", "91", "92", "93", "94", "95"]
 
 conn = sqlite3.connect("data/eau_secheresse.db")
@@ -75,24 +78,34 @@ cur.execute ("""
     PRIMARY KEY (code_bss, timestamp_mesure)
     )
 """)
-total_chroniques = 0
+
+compteur_mesure_recu = 0
+compteur_fichier_non_existant = 0
+cur.execute("SELECT COUNT(*) FROM raw_chroniques")
+compteur_avant = cur.fetchone()
 for code_bss in STATIONS_SUIVIES : 
     print(f"Station : {code_bss}")
-    mon_fichier = f"data/brut/chroniques_{code_bss.replace("/" , "_")}.json"
+    mon_fichier = f"data/brut/chroniques_{code_bss.replace("/" , "_")}_{date.today()}.json"
+    if not os.path.exists(mon_fichier) : 
+        compteur_fichier_non_existant += 1
+        print(f"le fichier : {code_bss} date : {date.today()} n existe pas")
+        continue
     with open(mon_fichier, "r", encoding="utf-8") as f:
         chronique = json.load(f)
     print(len(chronique))
-    total_chroniques += len(chronique)
+    compteur_mesure_recu +=len(chronique)
     cur.executemany("""INSERT OR REPLACE INTO raw_chroniques (code_bss,date_mesure,timestamp_mesure,niveau_nappe_eau,qualification,profondeur_nappe)
     VALUES(:code_bss,:date_mesure,:timestamp_mesure,:niveau_nappe_eau,:qualification,:profondeur_nappe)""", chronique)
     conn.commit()
 cur.execute("SELECT COUNT(*) FROM raw_chroniques")
-compteur = cur.fetchone()
-if compteur[0] == total_chroniques : 
-    print(f"Chroniques chargées : {compteur[0]} sur un total de {total_chroniques}")
+compteur_apres = cur.fetchone()
+ajoutee = compteur_apres[0] - compteur_avant[0]
+if 0 <= ajoutee <= compteur_mesure_recu: 
+    print(f"Nouvelles chroniques chargées : {ajoutee} sur un total de {compteur_apres[0]}")
 else : 
-    raise ValueError(f"Le chargement est incomplet, vous avez chargé {compteur[0]} / {total_chroniques} chroniques")
-
+    raise ValueError(f"Le chargement est incomplet, vous avez chargé {compteur_apres} chroniques sur {compteur_avant} chroniques de départ")
+print(f"Nombre de fichier non existant : {compteur_fichier_non_existant}")
+      
 #requête qui liste la dernière date de mesure pour chaque station
 cur.execute("""SELECT code_bss, MAX(date_mesure) FROM raw_chroniques
 GROUP BY code_bss""")
