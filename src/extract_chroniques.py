@@ -2,7 +2,7 @@ import json
 import sqlite3
 import requests
 import time
-import os
+from datetime import date
 
 conn = sqlite3.connect("data/eau_secheresse.db")
 cur = conn.cursor()
@@ -18,6 +18,15 @@ lignes = cur.fetchall()
 for ligne in lignes :
      STATIONS_SUIVIES.append(ligne[0])
 print(len(STATIONS_SUIVIES))
+
+
+cur.execute("""SELECT code_bss, MAX(date_mesure) FROM raw_chroniques
+GROUP BY code_bss""")
+date_max_station = cur.fetchall()
+date_chroniques = {}
+for code_bss, derniere_date in date_max_station :
+    date_chroniques[code_bss] = derniere_date
+
 
 conn.close()
 
@@ -44,6 +53,7 @@ def appeler_api(url, parametres) :
 
 
 
+
 def parcourir_les_pages(url, parametres) : 
     page = 0
     page_max = 100
@@ -52,7 +62,6 @@ def parcourir_les_pages(url, parametres) :
         try :  
             r = appeler_api(url, parametres) 
             reponse = r.json()
-
             donnees.extend(reponse["data"])
             url = reponse["next"]
             parametres = None
@@ -67,13 +76,15 @@ def parcourir_les_pages(url, parametres) :
     else : 
         raise ValueError(f"Chargement des données NOK, Nombre d'éléments reçues : {len(donnees)} sur un total de {reponse['count']}")
 
-
+nb_fichier_chronique = 0
 for code_bss in STATIONS_SUIVIES : 
-    mon_fichier_chronique = f"data/brut/chroniques_{code_bss.replace("/" , "_")}.json"
-    if os.path.exists(mon_fichier_chronique) :
-        print(f"Déjà présent on passe : {code_bss}") 
-        continue
-    parametres_chroniques = {"code_bss" : code_bss, "size" : 1000}
+    mon_fichier_chronique = f"data/brut/chroniques_{code_bss.replace("/" , "_")}_{date.today()}.json"
+    parametres_chroniques = {"code_bss" : code_bss, "size" : 1000, "date_debut_mesure" : date_chroniques[code_bss]} 
     donnees_chroniques = parcourir_les_pages(URL_CHRONIQUE,parametres_chroniques)
     with open(mon_fichier_chronique, "w", encoding="utf-8") as f:
         json.dump(donnees_chroniques, f, ensure_ascii=False, indent=2)
+        nb_fichier_chronique += 1
+if nb_fichier_chronique == len(STATIONS_SUIVIES) : 
+    print(f"Le chargement est complet, vous avez chargé {nb_fichier_chronique}  / {len(STATIONS_SUIVIES)} fichiers")
+else : 
+    raise ValueError(f"Le chargement est incomplet, vous avez chargé {nb_fichier_chronique} / {len(STATIONS_SUIVIES)} fichiers")
