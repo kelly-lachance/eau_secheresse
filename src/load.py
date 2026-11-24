@@ -75,28 +75,23 @@ cur.execute ("""
     niveau_nappe_eau REAL,
     qualification TEXT,
     profondeur_nappe REAL,
-    PRIMARY KEY (code_bss, timestamp_mesure)
+    PRIMARY KEY (code_bss, date_mesure)
     )
 """)
 
-compteur_mesure_recu = 0
-compteur_fichier_non_existant = 0
+
 cur.execute("SELECT COUNT(*) FROM raw_chroniques")
 compteur_avant = cur.fetchone()
-for code_bss in STATIONS_SUIVIES : 
-    print(f"Station : {code_bss}")
-    mon_fichier = f"data/brut/chroniques_{code_bss.replace("/" , "_")}_{date.today()}.json"
-    if not os.path.exists(mon_fichier) : 
-        compteur_fichier_non_existant += 1
-        print(f"le fichier : {code_bss} date : {date.today()} n existe pas")
-        continue
-    with open(mon_fichier, "r", encoding="utf-8") as f:
-        chronique = json.load(f)
-    print(len(chronique))
-    compteur_mesure_recu +=len(chronique)
-    cur.executemany("""INSERT OR REPLACE INTO raw_chroniques (code_bss,date_mesure,timestamp_mesure,niveau_nappe_eau,qualification,profondeur_nappe)
-    VALUES(:code_bss,:date_mesure,:timestamp_mesure,:niveau_nappe_eau,:qualification,:profondeur_nappe)""", chronique)
-    conn.commit()
+mon_fichier = f"data/brut/chroniques_incr_{date.today()}.json"
+if not os.path.exists(mon_fichier) : 
+    raise ValueError(f"Fichier absent : {mon_fichier}")
+with open(mon_fichier, "r", encoding="utf-8") as f:
+    mesures = json.load(f)
+print(len(mesures))
+compteur_mesure_recu =len(mesures)
+cur.executemany("""INSERT OR REPLACE INTO raw_chroniques (code_bss,date_mesure,timestamp_mesure,niveau_nappe_eau,qualification,profondeur_nappe)
+VALUES(:code_bss,:date_mesure,:timestamp_mesure,:niveau_nappe_eau,:qualification,:profondeur_nappe)""", mesures)
+conn.commit()
 cur.execute("SELECT COUNT(*) FROM raw_chroniques")
 compteur_apres = cur.fetchone()
 ajoutee = compteur_apres[0] - compteur_avant[0]
@@ -104,7 +99,7 @@ if 0 <= ajoutee <= compteur_mesure_recu:
     print(f"Nouvelles chroniques chargées : {ajoutee} sur un total de {compteur_apres[0]}")
 else : 
     raise ValueError(f"Le chargement est incomplet, vous avez chargé {compteur_apres} chroniques sur {compteur_avant} chroniques de départ")
-print(f"Nombre de fichier non existant : {compteur_fichier_non_existant}")
+
       
 #requête qui liste la dernière date de mesure pour chaque station
 cur.execute("""SELECT code_bss, MAX(date_mesure) FROM raw_chroniques
@@ -121,6 +116,13 @@ date_max_station = cur.fetchall()
 print("Station dont la dernière mesure date de plus de 30 jours")
 for code_bss, derniere_date in date_max_station : 
     print(f"Station : {code_bss} --> mesure {derniere_date}")
+
+cur.execute("""SELECT code_bss, date_mesure, COUNT(*) as nb_lignes FROM raw_chroniques
+GROUP BY code_bss, date_mesure
+HAVING nb_lignes >1""")
+doublon=cur.fetchall()
+for code_bss, date_mesure, nb_lignes in doublon : 
+    print(f"Station doublon : {code_bss} --> derniere date mesure : {date_mesure} --> nombre de doublon : {nb_lignes}")
 
 conn.close()
 
