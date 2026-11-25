@@ -1,9 +1,16 @@
 import json
 import sqlite3
-import requests
-import time
 from datetime import date
 from api_hubeau import appeler_api, parcourir_les_pages
+import logging
+
+logging.basicConfig(
+     filename="logs/pipeline.log",
+     level=logging.INFO,
+     format="%(asctime)s %(levelname)-8s %(message)s",
+     encoding="utf-8",
+
+)
 
 conn = sqlite3.connect("data/eau_secheresse.db")
 cur = conn.cursor()
@@ -17,7 +24,7 @@ WHERE date_debut_mesure <= '2016-01-01'
 lignes = cur.fetchall()
 for ligne in lignes :
      STATIONS_SUIVIES.append(ligne[0])
-print(len(STATIONS_SUIVIES))
+logging.info(f"{len(STATIONS_SUIVIES)} stations suivies")
 
 
 cur.execute("""SELECT code_bss, MAX(date_mesure) FROM raw_chroniques
@@ -38,15 +45,20 @@ for code_bss in STATIONS_SUIVIES :
     mesures_stations.extend(donnees_chroniques)
     nb_stations_interrogees+= 1
 if nb_stations_interrogees == len(STATIONS_SUIVIES): 
-    print(f"Le chargement est complet, vous avez chargé {nb_stations_interrogees}  / {len(STATIONS_SUIVIES)} stations")
+    logging.info(f"Le chargement est complet, vous avez chargé {nb_stations_interrogees}  / {len(STATIONS_SUIVIES)} stations")
 else : 
-    raise ValueError(f"Le chargement est incomplet, vous avez chargé {nb_stations_interrogees} / {len(STATIONS_SUIVIES)} stations")
+    message = f"Le chargement est incomplet, vous avez chargé {nb_stations_interrogees} / {len(STATIONS_SUIVIES)} stations"
+    logging.error(message)
+    raise ValueError(message)
 
 if len(mesures_stations) != 0 : 
-    print(f"Total de nouvelles données reçues : {len(mesures_stations)}")
+    logging.info(f"Total de nouvelles données reçues : {len(mesures_stations)}")
 else : 
-    raise ValueError(f"Problème lors du chargement des données, le compteur des chroniques est à 0 pour toutes les stations")
+    message = f"Problème lors du chargement des données, le compteur des chroniques est à 0 pour toutes les stations"
+    logging.error(message)
+    raise ValueError(message)
 
 mon_fichier_chronique = f"data/brut/chroniques_incr_{date.today()}.json"
 with open(mon_fichier_chronique, "w", encoding="utf-8") as f:
         json.dump(mesures_stations, f, ensure_ascii=False, indent=2)
+logging.info(f"Données écrites dans {mon_fichier_chronique}")

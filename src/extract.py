@@ -1,8 +1,15 @@
 
-import requests
 import json
-import time
 from api_hubeau import appeler_api, parcourir_les_pages
+import logging
+
+logging.basicConfig(
+     filename="logs/pipeline.log",
+     level=logging.INFO,
+     format="%(asctime)s %(levelname)-8s %(message)s",
+     encoding="utf-8",
+
+)
 
 URL_STATION = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/stations"
 
