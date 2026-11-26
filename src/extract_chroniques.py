@@ -1,5 +1,5 @@
 import json
-import sqlite3
+import duckdb
 from datetime import date
 from api_hubeau import appeler_api, parcourir_les_pages
 import logging
@@ -12,29 +12,28 @@ logging.basicConfig(
 
 )
 
-conn = sqlite3.connect("data/eau_secheresse.db")
-cur = conn.cursor()
+con = duckdb.connect("data/eau_secheresse.duckdb")
 URL_CHRONIQUE = "https://hubeau.eaufrance.fr/api/v1/niveaux_nappes/chroniques"
 STATIONS_SUIVIES = []
 
-cur.execute("""SELECT code_bss FROM raw_stations 
+con.execute("""SELECT code_bss FROM raw_stations 
 WHERE date_debut_mesure <= '2016-01-01'
   AND date_fin_mesure  >= '2026-01-01'
   AND nb_mesures_piezo >= 3300""")
-lignes = cur.fetchall()
+lignes = con.fetchall()
 for ligne in lignes :
      STATIONS_SUIVIES.append(ligne[0])
 logging.info(f"{len(STATIONS_SUIVIES)} stations suivies")
 
 
-cur.execute("""SELECT code_bss, MAX(date_mesure) FROM raw_chroniques
+con.execute("""SELECT code_bss, MAX(date_mesure) FROM raw_chroniques
 GROUP BY code_bss""")
-date_max_station = cur.fetchall()
+date_max_station = con.fetchall()
 date_chroniques = {}
 for code_bss, derniere_date in date_max_station :
     date_chroniques[code_bss] = derniere_date
 
-conn.close()
+con.close()
 
 
 mesures_stations = []
