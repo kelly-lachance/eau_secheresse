@@ -1,0 +1,2 @@
+SELECT code_bss,date_debut_mesure,date_fin_mesure,code_commune_insee,nom_commune,x,y,altitude_station,nb_mesures_piezo,code_departement,nom_departement,profondeur_investigation
+FROM {{source('brut','raw_stations')}}

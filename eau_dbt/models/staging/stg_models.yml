@@ -1,0 +1,23 @@
+version: 2
+models:
+  - name: stg_stations
+    columns:
+      - name: code_bss
+        data_tests:
+          - unique
+          - not_null
+
+  - name: stg_chroniques
+    data_tests: 
+      - unique:
+          column_name: "code_bss || '|' || CAST(date_mesure AS VARCHAR)"
+    columns:
+      - name: code_bss
+        data_tests:
+          - not_null
+      - name: date_mesure
+        data_tests:
+          - not_null
+      - name: niveau_ngf_m
+        data_tests:
+          - not_null
