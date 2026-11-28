@@ -1,6 +1,6 @@
 
 import json
-from api_hubeau import appeler_api, parcourir_les_pages
+from api_hubeau import parcourir_les_pages
 import logging
 
 logging.basicConfig(

@@ -1,123 +1,96 @@
-# Eau & sécheresse : suivi des nappes phréatiques d'Île-de-France
+# Projet portfolio : pipeline de suivi de la sécheresse (Hub'Eau)
 
-Pipeline de données **ELT** qui collecte chaque jour le niveau des nappes phréatiques franciliennes depuis l'API publique **Hub'Eau**. Il les historise dans une base locale et préparera des indicateurs de sécheresse consultables dans un dashboard.
+## L'idée en une phrase
+Un pipeline ELT qui collecte chaque jour le niveau des nappes phréatiques d'Île-de-France (API Hub'Eau ; V1 démarrée sur les Yvelines, élargie aux 8 départements franciliens en semaine 2). Il historise ces mesures, les croise avec la météo (Open-Meteo) et calcule des indicateurs de sécheresse visibles dans un petit dashboard.
 
-> Projet personnel de data engineering, construit pas à pas. Ingénieure agronome de formation, j'ai choisi un sujet où la donnée sert directement un enjeu agricole et environnemental : la disponibilité de l'eau souterraine.
+## Architecture visée (V1)
+```
+API Hub'Eau (nappes)  ─┐
+                       ├─> Python (extract + load) ─> base locale (SQLite puis DuckDB)
+API Open-Meteo (pluie) ─┘        │                              │
+                                 │                     dbt : staging -> marts + tests
+                     orchestrateur (Prefect) lance tout chaque jour      │
+                                                              dashboard (Streamlit)
+```
+Tout tourne en local et le code vit sur GitHub. C'est ce dépôt GitHub qui ira dans ton portfolio.
+
+## Rythme
+**Préférence de Kelly :** 2 questions essentielles maximum par message. On privilégie l'avancement du projet, et les questions de compréhension servent seulement quand elles débloquent quelque chose.
+
+Le planning compte 5 semaines. Chaque semaine prévoit 4 petites séances en semaine (15-30 min) et 2 séances de 2h le week-end. En semaine, on fait de la lecture, des exos courts et des petites corrections. Le week-end, on construit les gros morceaux. Si une notion bloque, on fait une pause exo dessus : on ne passe à l'étape suivante que quand tu sais **expliquer** ce que fait ton code.
 
 ---
 
-## Pourquoi ce projet ?
+## Semaine 1 : découvrir l'API et faire un premier chargement brut
+**Objectif :** récupérer les mesures d'une station et les stocker telles quelles dans SQLite.
 
-Les nappes phréatiques alimentent l'irrigation, l'eau potable et les cours d'eau en été. Suivre leur niveau dans le temps permet de repérer une sécheresse qui s'installe, bien avant qu'elle soit visible en surface. Le réseau national de piézomètres (ADES / BRGM) publie ces mesures en open data via l'API Hub'Eau. Ce projet les transforme en un jeu de données propre, historisé et mis à jour automatiquement.
+- Semaine : installer l'environnement (Python, environnement virtuel, Git, un dépôt GitHub vide avec un README). Explorer la documentation Hub'Eau « Piézométrie » dans le navigateur. Choisir ton département et 5 à 10 stations.
+- Week-end 1 : écrire un script `extract.py` qui appelle l'API pour **une** station et sauvegarde la réponse JSON brute.
+- Week-end 2 : écrire `load.py` qui insère ces mesures dans une table `raw_mesures_nappes` de SQLite (ce qu'on a déjà vu ensemble : connexion, curseur, requêtes paramétrées, commit).
 
-## Architecture
+**Notions :** requête HTTP (GET, paramètres, codes de retour), format JSON, pagination d'une API, différence entre donnée brute et donnée transformée (le « EL » de ELT).
+**Livrable :** une table SQLite remplie et un premier commit sur GitHub.
+**Tu sais expliquer :** pourquoi on stocke d'abord le brut sans le transformer.
 
-```
-API Hub'Eau (piézométrie) ─┐
-                           ├─> Python (extract + load) ─> SQLite  (DuckDB en semaine 2)
-API Open-Meteo (pluie)  ───┘          │                       │
-   (à venir)                          │              dbt : staging -> marts + tests
-                    orchestration Prefect (quotidienne)       │   (DuckDB local + Snowflake)
-                                                     dashboard Streamlit
-```
+## Semaine 2 : rendre l'ingestion fiable et incrémentale
+**Objectif :** pouvoir relancer le script chaque jour sans doublons ni plantage.
 
-Principe **ELT** : on stocke d'abord la donnée **brute**, telle que l'API la renvoie (fichiers JSON puis tables `raw_*`), et on ne la transforme qu'ensuite. Si une règle de calcul change, il suffit de rejouer la transformation sans réinterroger l'API.
+- Semaine : élargir aux 8 départements d'Île-de-France (75, 77, 78, 91, 92, 93, 94, 95), le département étant un paramètre du code ; boucler sur toutes les stations, gérer la pagination et les erreurs (API indisponible, station sans données), ajouter des logs.
+- Week-end 1 : passer au **chargement incrémental**. Le script cherche la dernière date déjà chargée et ne demande à l'API que ce qui est nouveau. Il rend aussi le chargement **idempotent** : le relancer deux fois donne le même résultat.
+- Week-end 2 : migrer de SQLite vers **DuckDB**, une base orientée colonnes, plus adaptée à l'analytique, et comprendre pourquoi.
 
-## Avancement
+**Notions :** incrémental et full refresh, idempotence, clé unique, base orientée lignes et base orientée colonnes.
+**Livrable :** un script qu'on peut lancer tous les jours sans risque.
+**Tu sais expliquer :** ce qui se passe si le script plante au milieu et qu'on le relance.
 
-| Étape | Statut |
-|---|---|
-| 1. Exploration de l'API, extraction et chargement brut | ✅ terminé (22/11/2026) |
-| 2. Ingestion fiable et incrémentale, migration vers DuckDB | 🔄 en cours |
-| 3. Transformations dbt (staging, faits/dimensions, tests), cible Snowflake | ⏳ à venir |
-| 4. Croisement avec la météo (Open-Meteo), orchestration Prefect | ⏳ à venir |
-| 5. Dashboard Streamlit | ⏳ à venir |
+## Semaine 3 : transformer avec dbt
+**Objectif :** passer des données brutes à des tables propres et à des indicateurs.
 
-## Les données en chiffres (au 24/11/2026)
+- Semaine : installer dbt (avec l'adaptateur DuckDB), comprendre la structure d'un projet dbt, déclarer ta table brute comme `source`.
+- Week-end 1 : créer les modèles de **staging** (renommage, typage, nettoyage) puis une dimension `dim_stations` et une table de faits `fct_niveaux_journaliers`.
+- Week-end 2 : calculer un indicateur de sécheresse, par exemple l'écart du niveau du jour à la moyenne historique du même mois, avec des fonctions de fenêtrage. Ajouter des **tests dbt** (not_null, unique, relationships).
 
-- **6 471 stations** piézométriques référencées en Île-de-France (8 départements).
-- **64 stations retenues** pour le suivi : un historique d'au moins 10 ans, encore actives en 2026 et au moins 3 300 mesures.
-- **635 031 mesures** journalières en base, une par station et par jour : 634 890 issues du chargement initial de l'historique, puis **141 ajoutées** par le premier passage incrémental du 24/11/2026. Certaines séries remontent à plus de 50 ans, comme celle de la station 01825X0091/P1 à Mareil-le-Guyon (78), suivie depuis 1972.
+- **Snowflake (choix du 21/11) :** activer l'essai gratuit Snowflake au début de cette semaine (pas avant), charger le brut dans un stage puis `COPY INTO` une colonne `VARIANT`, et déclarer deux cibles dbt : DuckDB en local et Snowflake dans le cloud. Le projet doit rester utilisable en local après la fin de l'essai.
 
-| Département | Stations référencées | Stations retenues |
-|---|---:|---:|
-| 75 Paris | 2 069 | 1 |
-| 77 Seine-et-Marne | 1 256 | 35 |
-| 78 Yvelines | 177 | 11 |
-| 91 Essonne | 146 | 11 |
-| 92 Hauts-de-Seine | 1 053 | 0 |
-| 93 Seine-Saint-Denis | 707 | 0 |
-| 94 Val-de-Marne | 623 | 0 |
-| 95 Val-d'Oise | 440 | 6 |
+**Notions :** couches staging / marts, `ref()` et `source()`, entrepôt cloud (Snowflake, stage, VARIANT), star schema (faits et dimensions), fonctions de fenêtrage, tests de données.
+**Livrable :** un `dbt build` qui passe, avec ses tests au vert.
+**Tu sais expliquer :** la différence entre une table de faits et une dimension, avec ton propre projet comme exemple.
 
-Paris et la petite couronne comptent beaucoup de stations, mais presque aucune ne passe le filtre. Il s'agit probablement de points de mesure ponctuels (chantiers, études), dont l'historique est trop court ou interrompu. C'est pourquoi la grande couronne concentre les stations retenues.
+## Semaine 4 : ajouter la météo et orchestrer
+**Objectif :** croiser deux sources et automatiser le pipeline.
 
-## Ce qui est en place
+- Semaine : explorer l'API Open-Meteo (précipitations et évapotranspiration journalières) et l'ingérer aux coordonnées de tes stations, avec le même modèle que les semaines 1 et 2.
+- Week-end 1 : joindre météo et nappes dans dbt. Le défi : les granularités ne sont pas les mêmes (point GPS ou station, cumul ou mesure ponctuelle).
+- Week-end 2 : orchestrer avec **Prefect**. Un flow enchaîne extraction Hub'Eau, extraction météo puis `dbt build`, et est planifié chaque jour.
 
-### Extraction (`src/extract.py`, `src/extract_chroniques.py`, module commun `src/api_hubeau.py`)
-- Appels à l'API Hub'Eau avec `requests` : paramètres, en-tête `User-Agent` et délai d'attente maximal (timeout).
-- **Pagination** complète : on suit le lien `next` jusqu'à `null`, avec un garde-fou sur le nombre maximal de pages.
-- **Relances automatiques** (`appeler_api`) : 3 tentatives espacées de 15 s en cas de timeout, d'erreur serveur 5xx ou de problème réseau. Une erreur 4xx arrête tout de suite le script, car c'est la requête qu'il faut corriger.
-- **Contrôles qualité** : le nombre de lignes reçues doit égaler le `count` annoncé par l'API, et le nombre de fichiers produits doit égaler le nombre de stations suivies.
-- Les réponses brutes sont sauvegardées en JSON dans `data/brut/` (non versionné).
-- **Mode incrémental** : pour chaque station, le script lit en base la date de la dernière mesure (`MAX(date_mesure)`) et ne demande à l'API que les mesures à partir de cette date. Chaque passage écrit **un seul fichier daté** regroupant toutes les stations (`chroniques_incr_<AAAA-MM-JJ>.json`) : l'historique brut reste intact, et chaque mesure porte sa propre clé (station + date).
-- **Garde-fou contre l'échec silencieux** : si aucune des 64 stations ne renvoie de mesure, le script s'arrête en erreur au lieu d'afficher « OK ».
+- **Machine learning (choix du 24/11) :** en fin de semaine, environ 2 séances, regrouper les stations par comportement avec un **clustering (KMeans)** sur des variables calculées dans dbt (amplitude saisonnière, vitesse de réaction à la pluie, tendance). Le résultat, « nappes réactives » contre « nappes inertielles », sera affiché sur la carte Streamlit. Le ML reste un consommateur des tables propres du pipeline.
 
-### Chargement (`src/load.py`)
-- Base SQLite `data/eau_secheresse.db` avec deux tables brutes :
-  - `raw_stations` : clé primaire `code_bss` ;
-  - `raw_chroniques` : **clé primaire composite** (`code_bss`, `date_mesure`), soit une mesure par station et par jour.
-- Chargement **idempotent** avec `INSERT OR REPLACE` : relancer le script ne crée jamais de doublon.
-- Requêtes paramétrées (`executemany` avec des paramètres nommés), ce qui protège contre l'injection SQL.
-- La liste des stations suivies est **calculée en SQL** à partir de `raw_stations`, et non écrite en dur.
-- **Contrôle du chargement incrémental** : un `COUNT` avant et après le chargement, avec la vérification `0 ≤ lignes ajoutées ≤ mesures reçues`. Les stations sans fichier du jour sont signalées et comptées sans arrêter le traitement.
-- **Validé en conditions réelles** le 24/11/2026 : extraction et chargement incrémentaux de bout en bout. Ce premier passage a révélé 15 doublons, corrigés (voir ci-dessous).
+**Notions :** jointure de sources hétérogènes, DAG (graphe de dépendances entre tâches), planification, relance en cas d'échec.
+**Livrable :** un pipeline complet déclenché automatiquement.
+**Tu sais expliquer :** pourquoi un orchestrateur plutôt qu'un simple cron.
 
-### Journalisation
-- Module `logging` : chaque script écrit dans `logs/pipeline.log` (non versionné), avec horodatage et niveau.
-- `INFO` pour le déroulement normal, `WARNING` pour les anomalies non bloquantes (relance d'un appel API, station muette depuis plus de 30 jours), `ERROR` juste avant chaque arrêt, `DEBUG` pour le détail (pages, dernière date par station), activable au besoin.
-- Le module commun `api_hubeau.py` émet ses messages sans configurer la journalisation : c'est le script appelant (puis l'orchestrateur) qui décide où ils vont.
+## Semaine 5 : rendre le projet présentable
+**Objectif :** que quelqu'un comprenne ton projet en 2 minutes.
 
-## Ce que les données ont déjà montré
+- Semaine : construire un petit dashboard **Streamlit** (carte des stations en alerte, courbe nappe et pluie pour une station).
+- Week-end 1 : écrire le README (contexte métier agro, schéma d'architecture, comment lancer le projet, choix techniques et leurs limites).
+- Week-end 2 : relire le code, nettoyer, préparer le « pitch » de 2 minutes pour un entretien et ajouter le projet à ton portfolio.
 
-**Fraîcheur des données.** Au 22/11/2026, 48 stations ont une mesure datée de moins de 5 jours. 15 stations sont figées à la mi-septembre, la plupart à la même date, ce qui suggère un réseau qui transmet par lots. Une dernière station est muette depuis juin. Un dashboard devra afficher la date de dernière mesure pour qu'une station silencieuse ne passe pas pour une nappe stable.
+**Livrable :** un dépôt GitHub propre et une section portfolio.
 
-**Fiabilité de la source.** L'API a connu deux incidents pendant le développement. Le 18/11, elle renvoyait une page HTML d'erreur avec un code 200. Le 22/11, l'endpoint `/chroniques` renvoyait 0 résultat pour toutes les stations de France, alors que `/stations` fonctionnait. Ces incidents ont motivé les relances automatiques et le garde-fou contre l'échec silencieux.
+---
 
-**Données provisoires et choix de la clé.** Le premier passage incrémental a reçu 205 mesures et ajouté 156 lignes, alors qu'on en attendait 141 : 205 moins les 64 mesures de la dernière date déjà en base. En cherchant les couples (station, date) présents deux fois, on a trouvé 15 doublons, tous sur la dernière journée du téléchargement précédent. Par exemple, pour la station 01258X0020/S1 au 20/11, l'API publiait d'abord une mesure de 7 h (47,22 m), puis l'a remplacée par une mesure de fin de journée (47,24 m), avec un autre horodatage. La clé initiale (`code_bss`, `timestamp_mesure`) traitait ces deux versions comme deux mesures distinctes. La clé est donc passée à (`code_bss`, `date_mesure`) : la table a été sauvegardée, recréée puis rechargée à partir des fichiers bruts, sans réinterroger l'API. Résultat : 635 031 lignes et zéro doublon.
+## Pistes pour une V2 (plus tard, selon ta formation)
+- Ajouter la **qualité des eaux** (nitrates, pesticides) via Hub'Eau : très parlant pour un profil agro.
+- Mettre en place la CI avec GitHub Actions (tests dbt à chaque push).
+- Passer dans le cloud (stockage objet et un entrepôt type BigQuery).
+- Conteneuriser avec Docker.
 
-## Lancer le projet
-
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows : .venv\Scripts\activate
-pip install -r requirements.txt
-
-python src/extract.py            # 1. stations d'Île-de-France -> data/brut/
-python src/load.py               # 2. chargement de raw_stations
-python src/extract_chroniques.py # 3. mesures des 64 stations suivies
-python src/load.py               # 4. chargement de raw_chroniques
-```
-
-Les étapes dépendent les unes des autres : la liste des stations suivies vient de `raw_stations`, et la date de reprise de l'incrémental vient de `raw_chroniques`. Cet enchaînement sera confié à un orchestrateur (Prefect) en semaine 4.
-
-## Choix techniques
-
-| Choix | Pourquoi |
-|---|---|
-| Stockage du JSON brut avant chargement | Rejouer le chargement sans réinterroger l'API, et garder une trace de ce que la source a réellement renvoyé |
-| Clé composite `code_bss` + `date_mesure` | La chronique est journalière : une seule valeur par station et par jour. Une version plus récente d'une mesure remplace donc la version provisoire au lieu de créer un doublon |
-| Incrémental qui repart de la **dernière date** (et non du lendemain) | Récupérer une éventuelle correction de la dernière mesure ; le doublon est absorbé par `INSERT OR REPLACE` |
-| Dates au format ISO `AAAA-MM-JJ` | L'ordre alphabétique correspond à l'ordre chronologique, donc `MAX()` et les comparaisons fonctionnent sur du texte |
-| SQLite pour démarrer, DuckDB ensuite | SQLite pour apprendre les bases sans serveur ; DuckDB, base orientée colonnes, pour l'analytique |
-| DuckDB en local, Snowflake comme seconde cible dbt | Découvrir un entrepôt cloud tout en gardant un projet qui fonctionne gratuitement en local |
-
-## Limites connues et prochaines étapes
-
-- Le contrôle final compare la table entière : si une station sort un jour du filtre, ses anciennes mesures restent en base. Ce cas sera géré dans la couche dbt.
-- Migration de SQLite vers DuckDB, puis transformations dbt (staging, `dim_stations`, `fct_niveaux_journaliers`, indicateur d'écart à la normale saisonnière).
-
-## Sources
-
-- [Hub'Eau, API Piézométrie](https://hubeau.eaufrance.fr/page/api-piezometrie) : données ADES / BRGM, licence ouverte Etalab.
-- [Open-Meteo](https://open-meteo.com/) (à venir) : précipitations et évapotranspiration.
+## Suivi
+| Semaine | Statut | Notions acquises | Remarques |
+|---|---|---|---|
+| 1 | terminée (22/11) | Lecture d'une URL d'API (paramètres, filtres optionnels), champ count, pagination (size, page, next = null en fin), clé unique code_bss, venv + requirements.txt + .gitignore, requests (params, headers, timeout, codes HTTP 4xx/5xx), json.dump vers data/brut/, full refresh idempotent, boucle while de pagination (next, garde-fou page_max, extend, contrôle len == count), code 206, débogage (print(r.url), lecture d'erreur), fonctions (def/return, variables locales), Content-Type, load.py : json.load + sqlite3 (CREATE TABLE, PRIMARY KEY, codes en TEXT, executemany avec :noms) — 6471 stations IDF chargées (INSERT OR REPLACE), 64 stations utiles après filtre ; chroniques des 64 stations extraites avec appeler_api (retry 3 essais, attente, 4xx vs 5xx), reprise via os.path.exists ; raw_chroniques chargée (clé composite code_bss + timestamp_mesure) : 634 890 mesures, contrôle COUNT = somme des fichiers avec raise ValueError ; agrégats MAX + HAVING, alias, dates ISO ; fraîcheur : 48 stations à jour, 16 sans mesure depuis plus de 30 jours | Département : Yvelines (78), 177 stations. Filtre stations utiles : `date_debut_mesure <= '2016-01-01' AND date_fin_mesure >= '2026-01-01' AND nb_mesures_piezo >= 3300` (à rendre dynamique en Python). Station test : 01825X0091/P1 (13396 mesures depuis 1972-10-10) |
+| 2 | terminée (28/11) | Incrémental (MAX(date_mesure) par station, param date_debut_mesure, 1 fichier chroniques_incr_AAAA-MM-JJ.json), COUNT avant/après, HAVING, garde-fou échec silencieux, données provisoires et migration de clé (code_bss, date_mesure) avec sauvegarde et rechargement depuis le brut, module commun api_hubeau.py + docstrings, logging (niveaux, basicConfig, contexte), DuckDB (read_json_auto, glob trié, full refresh init_duckdb.py vs incrémental load.py, ATTACH SQLite + EXCEPT, CTE WITH, INTERVAL, fetchone()[0]) ; 93 mesures perdues du brut retrouvées et rattrapées (date_fin_mesure exclusive) | 635 236 mesures au 28/11, migration prouvée (EXCEPT = 0). SQLite abandonné |
+| 3 | à faire | | |
+| 4 | à faire | | |
+| 5 | à faire | | |
